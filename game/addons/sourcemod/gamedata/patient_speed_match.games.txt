@@ -1,0 +1,25 @@
+"Games"
+{
+	"tf2classic"
+	{
+		"Functions"
+		{
+			"CWeaponMedigun::HealTargetThink"
+			{
+				"signature"	"CWeaponMedigun::HealTargetThink"
+				"callconv"	"thiscall"
+				"this"		"entity"
+				"return"	"void"
+			}
+		}
+
+		"Signatures"
+		{
+			"CWeaponMedigun::HealTargetThink"
+			{
+				"library"	"server"
+				"linux"		"@_ZN14CWeaponMedigun15HealTargetThinkEv"
+			}
+		}
+	}
+}

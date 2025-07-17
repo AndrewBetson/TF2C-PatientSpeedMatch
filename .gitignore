@@ -4,6 +4,7 @@
 
 # Scripts and stuff.
 !*.sp
+!*.txt
 
 # Git stuff.
 !LICENSE.md
