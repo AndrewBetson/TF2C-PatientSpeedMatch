@@ -9,10 +9,12 @@
 #pragma newdecls required
 
 #if !defined PLUGIN_VERSION
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.1.0"
 #endif // !defined PLUGIN_VERSION
 
 DHookSetup gDetour_CWeaponMedigun_HealTargetThink;
+float gDefaultMaxSpeed[ MAXPLAYERS+1 ] = { 0.0, ... };
+ConVar psm_match_shield_charge;
 
 public Plugin myinfo =
 {
@@ -39,6 +41,31 @@ public void OnPluginStart()
 	{
 		SetFailState( "Failed to detour CWeaponMedigun::HealTargetThink, tell Andrew to update the signatures." );
 	}
+
+	psm_match_shield_charge = CreateConVar(
+		"psm_match_shield_charge",
+		"0",
+		"Match speed of players charging with shields",
+		FCVAR_NONE,
+		true, 0.0,
+		true, 1.0
+	);
+
+	HookEvent( "post_inventory_application", Event_PostInventoryApplication );
+}
+
+public void Event_PostInventoryApplication( Event Evt, const char[] Name, bool bDontBroadcast )
+{
+	// Cache-off player's default max speed
+	// to compare against in HealTargetThink.
+	//
+	// We do this in post_inventory_application
+	// in case we're being used by a server
+	// that has custom weapons that change
+	// Medic's max speed.
+
+	int Client = GetClientOfUserId( Evt.GetInt( "userid" ) );
+	gDefaultMaxSpeed[ Client ] = GetEntPropFloat( Client, Prop_Send, "m_flMaxspeed" );
 }
 
 public MRESReturn Detour_CWeaponMedigun_HealTargetThink( int This, DHookReturn Return, DHookParam Params )
@@ -52,15 +79,37 @@ public MRESReturn Detour_CWeaponMedigun_HealTargetThink( int This, DHookReturn R
 		return MRES_Ignored;
 	}
 
-	// We get this each time instead of just
-	// using a constant w/ Medic's default
-	// max speed in case servers that mess
-	// with class speeds use this plugin.
-	float MedicMaxSpeed = GetEntPropFloat( Medic, Prop_Send, "m_flMaxspeed" );
+	bool bIsMedicCharging = TF2_IsPlayerInCondition( Medic, TFCond_Charging );
+	bool bIsPatientCharging = TF2_IsPlayerInCondition( Patient, TFCond_Charging );
 
+	// Only match the speed of shield-charging patients
+	// if we're allowed to do so.
+	if ( bIsPatientCharging )
+	{
+		if ( psm_match_shield_charge.BoolValue && !bIsMedicCharging )
+		{
+			// Make the Medic start charging to match.
+			TF2_AddCondition( Medic, TFCond_Charging );
+		}
+
+		return MRES_Ignored;
+	}
+	else if ( bIsMedicCharging )
+	{
+		// Make the Medic stop charging if the patient's charge has run out.
+		TF2_RemoveCondition( Medic, TFCond_Charging );
+		return MRES_Ignored;
+	}
+
+	float MedicMaxSpeed = gDefaultMaxSpeed[ Medic ];
 	float PatientMaxSpeed = GetEntPropFloat( Patient, Prop_Send, "m_flMaxspeed" );
 
-	SetEntPropFloat( Medic, Prop_Send, "m_flMaxspeed", PatientMaxSpeed > MedicMaxSpeed ? PatientMaxSpeed : MedicMaxSpeed );
+	// Only match the patient's speed if it's
+	// greater than this Medic's default max speed.
+	if ( PatientMaxSpeed > MedicMaxSpeed )
+	{
+		SetEntPropFloat( Medic, Prop_Send, "m_flMaxspeed", PatientMaxSpeed );
+	}
 
 	return MRES_Ignored;
 }
